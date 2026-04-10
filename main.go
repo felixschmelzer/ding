@@ -28,6 +28,30 @@ func main() {
 	}
 
 	args := os.Args[1:]
+
+	// Start periodic "still running" notifications if configured.
+	cmdStart := time.Now()
+	if cfg.NotifyInterval > 0 {
+		stopNotify := make(chan struct{})
+		defer close(stopNotify)
+		go func() {
+			ticker := time.NewTicker(time.Duration(cfg.NotifyInterval) * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					msg := buildRunningMessage(
+						strings.Join(args, " "),
+						formatDuration(time.Since(cmdStart)),
+					)
+					_ = sendTelegram(cfg, msg)
+				case <-stopNotify:
+					return
+				}
+			}
+		}()
+	}
+
 	exitCode, duration, err := runCommand(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "done: %v\n", err)

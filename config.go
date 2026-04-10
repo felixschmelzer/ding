@@ -1,18 +1,23 @@
 package main
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/BurntSushi/toml"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
+// Config holds the Telegram credentials and notification settings.
 type Config struct {
-	BotToken string `toml:"bot_token"`
-	ChatID   string `toml:"chat_id"`
+	BotToken       string `json:"bot_token"`
+	ChatID         string `json:"chat_id"`
+	NotifyInterval int    `json:"notify_interval"` // minutes between "still running" pings; 0 = disabled
 }
 
 func configPath() (string, error) {
@@ -20,7 +25,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "done", "config.toml"), nil
+	return filepath.Join(home, ".config", "donecli", "config.json"), nil
 }
 
 func loadConfig() (*Config, error) {
@@ -28,8 +33,12 @@ func loadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
 	var cfg Config
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
 	if cfg.BotToken == "" || cfg.ChatID == "" {
@@ -46,72 +55,190 @@ func saveConfig(cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	f, err := os.Create(path)
+	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return toml.NewEncoder(f).Encode(cfg)
+	return os.WriteFile(path, data, 0600)
+}
+
+// ── Bubble Tea TUI ────────────────────────────────────────────────────────────
+
+type configState int
+
+const (
+	stateEditing   configState = iota
+	stateSubmitted             //nolint:deadcode
+	stateCancelled
+)
+
+type configModel struct {
+	inputs  [3]textinput.Model
+	focused int
+	state   configState
+}
+
+var (
+	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	hintStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	boxStyle   = lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Padding(1, 2)
+)
+
+func initialConfigModel() configModel {
+	existing, _ := loadConfig()
+
+	token := textinput.New()
+	token.Placeholder = "123456789:ABCDefGhIJKlmNoPQRsTUVwxyZ"
+	token.Prompt = "Bot Token : "
+	token.CharLimit = 200
+	token.SetWidth(50)
+
+	chat := textinput.New()
+	chat.Placeholder = "123456789"
+	chat.Prompt = "Chat ID   : "
+	chat.CharLimit = 30
+	chat.SetWidth(50)
+
+	interval := textinput.New()
+	interval.Placeholder = "0"
+	interval.Prompt = "Interval  : "
+	interval.CharLimit = 5
+	interval.SetWidth(50)
+
+	if existing != nil {
+		token.SetValue(existing.BotToken)
+		chat.SetValue(existing.ChatID)
+		if existing.NotifyInterval > 0 {
+			interval.SetValue(strconv.Itoa(existing.NotifyInterval))
+		}
+	}
+	token.Focus()
+
+	return configModel{
+		inputs:  [3]textinput.Model{token, chat, interval},
+		focused: 0,
+		state:   stateEditing,
+	}
+}
+
+func (m configModel) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (m configModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			m.state = stateCancelled
+			return m, tea.Quit
+		case "enter":
+			if m.focused == len(m.inputs)-1 {
+				m.state = stateSubmitted
+				return m, tea.Quit
+			}
+			m.inputs[m.focused].Blur()
+			m.focused++
+			cmd := m.inputs[m.focused].Focus()
+			return m, cmd
+		case "tab", "down":
+			if m.focused < len(m.inputs)-1 {
+				m.inputs[m.focused].Blur()
+				m.focused++
+				cmd := m.inputs[m.focused].Focus()
+				return m, cmd
+			}
+		case "shift+tab", "up":
+			if m.focused > 0 {
+				m.inputs[m.focused].Blur()
+				m.focused--
+				cmd := m.inputs[m.focused].Focus()
+				return m, cmd
+			}
+		}
+	}
+
+	var cmd tea.Cmd
+	m.inputs[m.focused], cmd = m.inputs[m.focused].Update(msg)
+	return m, cmd
+}
+
+func (m configModel) View() tea.View {
+	telegramHeader := lipgloss.JoinVertical(lipgloss.Left,
+		titleStyle.Render("Telegram"),
+		labelStyle.Render("1. Message @BotFather on Telegram → /newbot → copy the token"),
+		labelStyle.Render("2. Message your bot, then open:"),
+		labelStyle.Render("   https://api.telegram.org/bot<TOKEN>/getUpdates"),
+		labelStyle.Render(`   Find "id" inside the "chat" object — that's your Chat ID.`),
+	)
+	telegramForm := lipgloss.JoinVertical(lipgloss.Left,
+		m.inputs[0].View(),
+		m.inputs[1].View(),
+	)
+
+	notificationsHeader := lipgloss.JoinVertical(lipgloss.Left,
+		titleStyle.Render("Notifications"),
+		labelStyle.Render("Periodically notify you while a command is still running."),
+	)
+	notificationsForm := lipgloss.JoinVertical(lipgloss.Left,
+		m.inputs[2].View()+hintStyle.Render("  minutes (0 = off)"),
+	)
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		telegramHeader,
+		boxStyle.Render(telegramForm),
+		"",
+		notificationsHeader,
+		boxStyle.Render(notificationsForm),
+		"",
+		hintStyle.Render("↑↓ / tab: navigate   enter: next / save   esc: cancel"),
+	)
+	v := tea.NewView(body)
+	v.AltScreen = true
+	return v
 }
 
 func runConfig() error {
-	existing, _ := loadConfig()
-
-	fmt.Println("done — Telegram notification setup")
-	fmt.Println("────────────────────────────────────")
-	fmt.Println()
-	fmt.Println("You need a Telegram bot token and your chat ID.")
-	fmt.Println("  1. Message @BotFather on Telegram → /newbot → copy the token")
-	fmt.Println("  2. Message your new bot, then open:")
-	fmt.Println("     https://api.telegram.org/bot<TOKEN>/getUpdates")
-	fmt.Println("     Look for \"id\" inside the \"chat\" object — that's your chat ID.")
-	fmt.Println()
-
-	reader := bufio.NewReader(os.Stdin)
-
-	prompt := func(label, current string) (string, error) {
-		if current != "" {
-			fmt.Printf("%s [%s]: ", label, current)
-		} else {
-			fmt.Printf("%s: ", label)
-		}
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			return current, nil
-		}
-		return line, nil
-	}
-
-	var cur Config
-	if existing != nil {
-		cur = *existing
-	}
-
-	cfg := &Config{}
-	var err error
-
-	cfg.BotToken, err = prompt("Bot token", cur.BotToken)
+	p := tea.NewProgram(initialConfigModel())
+	finalModel, err := p.Run()
 	if err != nil {
-		return err
-	}
-	cfg.ChatID, err = prompt("Chat ID", cur.ChatID)
-	if err != nil {
-		return err
+		return fmt.Errorf("TUI error: %w", err)
 	}
 
-	if cfg.BotToken == "" || cfg.ChatID == "" {
+	m, ok := finalModel.(configModel)
+	if !ok {
+		return fmt.Errorf("unexpected model type")
+	}
+
+	if m.state == stateCancelled {
+		return nil
+	}
+
+	token := strings.TrimSpace(m.inputs[0].Value())
+	chatID := strings.TrimSpace(m.inputs[1].Value())
+	if token == "" || chatID == "" {
 		return fmt.Errorf("bot token and chat ID are required")
 	}
 
-	if err := saveConfig(cfg); err != nil {
+	intervalStr := strings.TrimSpace(m.inputs[2].Value())
+	notifyInterval := 0
+	if intervalStr != "" && intervalStr != "0" {
+		v, err := strconv.Atoi(intervalStr)
+		if err != nil || v < 0 {
+			return fmt.Errorf("interval must be a non-negative number of minutes")
+		}
+		notifyInterval = v
+	}
+
+	if err := saveConfig(&Config{BotToken: token, ChatID: chatID, NotifyInterval: notifyInterval}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	path, _ := configPath()
-	fmt.Printf("\nConfig saved to %s\n", path)
+	fmt.Printf("Config saved to %s\n", path)
 	return nil
 }
