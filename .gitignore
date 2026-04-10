@@ -1,0 +1,19 @@
+# Binary
+done
+
+# macOS
+.DS_Store
+
+# Build output
+dist/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+
+# Ai
+.claude
+
