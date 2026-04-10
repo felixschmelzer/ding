@@ -58,15 +58,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	msg := buildMessage(
-		strings.Join(args, " "),
-		exitCode,
-		formatDuration(duration),
-		time.Now().Format("15:04:05"),
-	)
+	cmd := strings.Join(args, " ")
+	dur := formatDuration(duration)
+	finished := time.Now().Format("15:04:05")
 
+	if cfg.ShowSummary {
+		icon, status := "✅", "Done"
+		if exitCode != 0 {
+			icon, status = "❌", "Failed"
+		}
+		fmt.Printf("\n%s %s\n%s\nExit: %d | Duration: %s | Finished: %s\n",
+			icon, status, cmd, exitCode, dur, finished)
+	}
+
+	msg := buildMessage(cmd, exitCode, dur, finished)
 	if err := sendTelegram(cfg, msg); err != nil {
-		fmt.Fprintf(os.Stderr, "done: notification failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "done-msg: notification failed: %v\n", err)
 	}
 
 	os.Exit(exitCode)

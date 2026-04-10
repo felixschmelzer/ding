@@ -18,6 +18,7 @@ type Config struct {
 	BotToken       string `json:"bot_token"`
 	ChatID         string `json:"chat_id"`
 	NotifyInterval int    `json:"notify_interval"` // minutes between "still running" pings; 0 = disabled
+	ShowSummary    bool   `json:"show_summary"`    // print a summary to the terminal when the command finishes
 }
 
 func configPath() (string, error) {
@@ -72,10 +73,13 @@ const (
 	stateCancelled
 )
 
+const totalFocusable = 4 // 3 text inputs + 1 checkbox
+
 type configModel struct {
-	inputs  [3]textinput.Model
-	focused int
-	state   configState
+	inputs      [3]textinput.Model
+	showSummary bool
+	focused     int // 0-2: text inputs, 3: summary checkbox
+	state       configState
 }
 
 var (
@@ -109,24 +113,42 @@ func initialConfigModel() configModel {
 	interval.CharLimit = 5
 	interval.SetWidth(50)
 
+	showSummary := false
 	if existing != nil {
 		token.SetValue(existing.BotToken)
 		chat.SetValue(existing.ChatID)
 		if existing.NotifyInterval > 0 {
 			interval.SetValue(strconv.Itoa(existing.NotifyInterval))
 		}
+		showSummary = existing.ShowSummary
 	}
 	token.Focus()
 
 	return configModel{
-		inputs:  [3]textinput.Model{token, chat, interval},
-		focused: 0,
-		state:   stateEditing,
+		inputs:      [3]textinput.Model{token, chat, interval},
+		showSummary: showSummary,
+		focused:     0,
+		state:       stateEditing,
 	}
 }
 
 func (m configModel) Init() tea.Cmd {
 	return textinput.Blink
+}
+
+func (m configModel) moveFocus(dir int) (configModel, tea.Cmd) {
+	next := m.focused + dir
+	if next < 0 || next >= totalFocusable {
+		return m, nil
+	}
+	if m.focused < len(m.inputs) {
+		m.inputs[m.focused].Blur()
+	}
+	m.focused = next
+	if m.focused < len(m.inputs) {
+		return m, m.inputs[m.focused].Focus()
+	}
+	return m, nil
 }
 
 func (m configModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -137,34 +159,30 @@ func (m configModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = stateCancelled
 			return m, tea.Quit
 		case "enter":
-			if m.focused == len(m.inputs)-1 {
+			if m.focused == totalFocusable-1 {
 				m.state = stateSubmitted
 				return m, tea.Quit
 			}
-			m.inputs[m.focused].Blur()
-			m.focused++
-			cmd := m.inputs[m.focused].Focus()
-			return m, cmd
+			return m.moveFocus(1)
 		case "tab", "down":
-			if m.focused < len(m.inputs)-1 {
-				m.inputs[m.focused].Blur()
-				m.focused++
-				cmd := m.inputs[m.focused].Focus()
-				return m, cmd
-			}
+			return m.moveFocus(1)
 		case "shift+tab", "up":
-			if m.focused > 0 {
-				m.inputs[m.focused].Blur()
-				m.focused--
-				cmd := m.inputs[m.focused].Focus()
-				return m, cmd
+			return m.moveFocus(-1)
+		case "space":
+			if m.focused == totalFocusable-1 {
+				m.showSummary = !m.showSummary
+				return m, nil
 			}
 		}
 	}
 
-	var cmd tea.Cmd
-	m.inputs[m.focused], cmd = m.inputs[m.focused].Update(msg)
-	return m, cmd
+	// Delegate keypresses to the focused text input
+	if m.focused < len(m.inputs) {
+		var cmd tea.Cmd
+		m.inputs[m.focused], cmd = m.inputs[m.focused].Update(msg)
+		return m, cmd
+	}
+	return m, nil
 }
 
 func (m configModel) View() tea.View {
@@ -188,6 +206,21 @@ func (m configModel) View() tea.View {
 		m.inputs[2].View()+hintStyle.Render("  minutes (0 = off)"),
 	)
 
+	checkMark := "[ ] "
+	if m.showSummary {
+		checkMark = "[x] "
+	}
+	checkboxStyle := labelStyle
+	if m.focused == totalFocusable-1 {
+		checkboxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	}
+
+	terminalHeader := lipgloss.JoinVertical(lipgloss.Left,
+		titleStyle.Render("Terminal"),
+		labelStyle.Render("Options for output shown directly in your terminal."),
+	)
+	terminalForm := checkboxStyle.Render(checkMark + "Show summary when command finishes")
+
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		telegramHeader,
 		boxStyle.Render(telegramForm),
@@ -195,7 +228,10 @@ func (m configModel) View() tea.View {
 		notificationsHeader,
 		boxStyle.Render(notificationsForm),
 		"",
-		hintStyle.Render("↑↓ / tab: navigate   enter: next / save   esc: cancel"),
+		terminalHeader,
+		boxStyle.Render(terminalForm),
+		"",
+		hintStyle.Render("↑↓ / tab: navigate   space: toggle   enter: next / save   esc: cancel"),
 	)
 	v := tea.NewView(body)
 	v.AltScreen = true
@@ -234,7 +270,7 @@ func runConfig() error {
 		notifyInterval = v
 	}
 
-	if err := saveConfig(&Config{BotToken: token, ChatID: chatID, NotifyInterval: notifyInterval}); err != nil {
+	if err := saveConfig(&Config{BotToken: token, ChatID: chatID, NotifyInterval: notifyInterval, ShowSummary: m.showSummary}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
