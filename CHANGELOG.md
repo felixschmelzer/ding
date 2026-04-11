@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/felixschmelzer/ding/compare/v1.4.7...v1.5.0) (2026-04-11)
+
+
+### Features
+
+* autocompletion ([dad535e](https://github.com/felixschmelzer/ding/commit/dad535e95b15bf517121c545aa00525224d80a63))
+
 ## [1.4.7](https://github.com/felixschmelzer/ding/compare/v1.4.6...v1.4.7) (2026-04-11)
 
 
