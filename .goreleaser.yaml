@@ -27,18 +27,16 @@ archives:
     formats: [tar.gz]
     name_template: "ding-{{ .Os }}-{{ .Arch }}"
 
-homebrew:
+homebrew_casks:
   - name: ding
     ids: [tarball]
+    binaries: ["ding"]
     repository:
       owner: felixschmelzer
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/felixschmelzer/ding"
     description: "Run any shell command and get a Telegram notification when it finishes."
-    license: "MIT"
-    install: |
-      bin.install "ding"
 
 checksum:
   name_template: checksums.txt
