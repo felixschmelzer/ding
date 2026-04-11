@@ -1,0 +1,74 @@
+.TH DING 1 "2026" "ding" "User Commands"
+.SH NAME
+ding \- run a command and get a Telegram notification when it finishes
+.SH SYNOPSIS
+.B ding
+[\fB\-c\fR]
+[\fB\-v\fR]
+[\fB\-h\fR]
+.I command
+[\fIargs\fR...]
+.SH DESCRIPTION
+.B ding
+wraps any shell command, runs it in a PTY (pseudo-terminal), and sends
+a Telegram notification when the command finishes.
+The notification includes the command name, exit status, duration, and
+finish time.
+.PP
+If configured, ding can also send periodic "still running" pings while
+the command is in progress.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-config
+Open the interactive TUI setup to configure the Telegram bot token,
+chat ID, notification interval, and summary display.
+.TP
+.BR \-v ", " \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Show usage information and exit.
+.SH CONFIGURATION
+Configuration is stored at
+.I ~/.config/ding/config.json
+and contains the following fields:
+.TP
+.B bot_token
+Telegram bot token obtained from @BotFather.
+.TP
+.B chat_id
+Telegram chat ID to send notifications to.
+.TP
+.B notify_interval
+Interval in minutes for periodic "still running" notifications.
+Set to 0 to disable (default).
+.TP
+.B show_summary
+If true, print a summary table to the terminal when the command finishes.
+.PP
+Run
+.B ding \-\-config
+to configure interactively.
+.SH EXAMPLES
+.TP
+Run a build and get notified when done:
+.B ding make build
+.TP
+Run tests:
+.B ding npm run test
+.TP
+Run a deploy script:
+.B ding ./deploy.sh
+.TP
+Open the configuration UI:
+.B ding \-\-config
+.SH FILES
+.TP
+.I ~/.config/ding/config.json
+User configuration file.
+.SH SEE ALSO
+.BR curl (1)
+.SH BUGS
+Report bugs at https://github.com/felixschmelzer/ding/issues
+.SH AUTHOR
+Felix Schmelzer <https://github.com/felixschmelzer>

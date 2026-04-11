@@ -26,11 +26,14 @@ archives:
   - id: tarball
     formats: [tar.gz]
     name_template: "ding-{{ .Os }}-{{ .Arch }}"
+    files:
+      - man/ding.1
 
 homebrew_casks:
   - name: ding
     ids: [tarball]
     binaries: ["ding"]
+    manpages: ["man/ding.1"]
     repository:
       owner: felixschmelzer
       name: homebrew-tap
