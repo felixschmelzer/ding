@@ -12,6 +12,13 @@ Exit: 0 | Duration: 2m 14s | Finished: 14:32:01
 
 ## Install
 
+**Homebrew:**
+
+```bash
+brew tap felixschmelzer/tap
+brew install ding
+```
+
 **curl** (no Go required):
 
 ```bash

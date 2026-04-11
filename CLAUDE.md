@@ -47,6 +47,8 @@ Releases are fully automated via two GitHub Actions workflows:
 
 Config files: `.goreleaser.yaml`, `.releaserc.json`.
 
+GoReleaser also publishes a Homebrew cask to the tap repo `felixschmelzer/homebrew-tap` (secret: `TAP_GITHUB_TOKEN`). Users install via `brew tap felixschmelzer/tap && brew install ding`.
+
 The `version` variable in `main.go` is injected at build time via `-X main.version={{.Version}}`.
 
 ## Notes

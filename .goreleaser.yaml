@@ -37,6 +37,9 @@ homebrew_casks:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/felixschmelzer/ding"
     description: "Run any shell command and get a Telegram notification when it finishes."
+    hooks:
+      post:
+        install: "system_command '/usr/bin/xattr', args: ['-dr', 'com.apple.quarantine', '#{staged_path}/ding']"
 
 checksum:
   name_template: checksums.txt
