@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/felixschmelzer/ding/compare/v1.3.1...v1.4.0) (2026-04-11)
+
+
+### Features
+
+* **ops:** add homebrew release ([56d536a](https://github.com/felixschmelzer/ding/commit/56d536a60933892fbf4c68ad983c4f84890d3b35))
+
 ## [1.3.1](https://github.com/felixschmelzer/ding/compare/v1.3.0...v1.3.1) (2026-04-11)
 
 
