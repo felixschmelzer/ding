@@ -1,3 +1,10 @@
+## [1.4.5](https://github.com/felixschmelzer/ding/compare/v1.4.4...v1.4.5) (2026-04-11)
+
+
+### Bug Fixes
+
+* **ops:** brew remove quarantine post install ([22c18c4](https://github.com/felixschmelzer/ding/commit/22c18c4deadbcffb267c5de205191f73b78addaf))
+
 ## [1.4.4](https://github.com/felixschmelzer/ding/compare/v1.4.3...v1.4.4) (2026-04-11)
 
 
