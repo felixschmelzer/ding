@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/felixschmelzer/ding/compare/v1.3.0...v1.3.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* updated --help text ([ea24cec](https://github.com/felixschmelzer/ding/commit/ea24cec38e5e21fd47ef8e4d0d604d0e30d9bd37))
+
 # [1.3.0](https://github.com/felixschmelzer/ding/compare/v1.2.3...v1.3.0) (2026-04-11)
 
 
